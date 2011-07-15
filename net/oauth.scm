@@ -131,10 +131,10 @@
                            consumer-key consumer-secret
                            access-token access-token-secret)
   (let* ([auth-params `(("oauth_consumer_key" ,consumer-key)
-                        ("oauth_nonce" ,(oauth-nonce))
+                        ("oauth_token" ,access-token)
                         ("oauth_signature_method" "HMAC-SHA1")
                         ("oauth_timestamp" ,(timestamp))
-                        ("oauth_token" ,access-token)
+                        ("oauth_nonce" ,(oauth-nonce))
                         ("oauth_version" "1.0"))]
          [signature (oauth-signature
                      method request-url
@@ -161,9 +161,9 @@
   (let* ([r-response
           (oauth-request "GET" "http://api.twitter.com/oauth/request_token"
                          `(("oauth_consumer_key" ,consumer-key)
-                           ("oauth_nonce" ,(oauth-nonce))
                            ("oauth_signature_method" "HMAC-SHA1")
                            ("oauth_timestamp" ,(timestamp))
+                           ("oauth_nonce" ,(oauth-nonce))
                            ("oauth_version" "1.0"))
                          consumer-secret)]
          [r-token  (cgi-get-parameter "oauth_token" r-response)]
@@ -176,12 +176,12 @@
       (let* ([a-response
               (oauth-request "POST" "http://api.twitter.com/oauth/access_token"
                              `(("oauth_consumer_key" ,consumer-key)
-                               ("oauth_nonce" ,(oauth-nonce))
+                               ("oauth_token" ,r-token)
                                ("oauth_signature_method" "HMAC-SHA1")
                                ("oauth_timestamp" ,(timestamp))
-                               ("oauth_token" ,r-token)
-                               ("oauth_verifier" ,oauth-verifier)
-                               ("oauth_version" "1.0"))
+                               ("oauth_nonce" ,(oauth-nonce))
+                               ("oauth_version" "1.0")
+                               ("oauth_verifier" ,oauth-verifier))
                              r-secret)]
              [a-token (cgi-get-parameter "oauth_token" a-response)]
              [a-secret (cgi-get-parameter "oauth_token_secret" a-response)])
