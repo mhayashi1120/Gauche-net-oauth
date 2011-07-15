@@ -1,5 +1,5 @@
 ;;;
-;;; Twitter access module
+;;; OAuth module
 ;;;
 
 (define-module net.oauth
@@ -22,11 +22,12 @@
   (use util.list)
   (use util.match)
   (export 
+   oauth-auth-header
+   call/oauth
    ))
 (select-module net.oauth)
 
 ;; OAuth related stuff.
-;; These may be factored out into net.oauth module someday.
 ;; References to the section numbers refer to http://oauth.net/core/1.0/.
 
 ;; Returns query parameters with calculated "oauth_signature"
@@ -70,18 +71,6 @@
   (if (only-query-string? params)
     (compose-query params)
     (http-compose-form-data params #f 'utf-8)))
-
-(define (compose-query params)
-  (%-fix (http-compose-query #f params 'utf-8)))
-
-;; see `http-compose-form-data' comments
-(define (param-form-data? param)
-  (odd? (length param)))
-
-(define (%-fix str)
-  (regexp-replace-all* str #/%[\da-fA-F][\da-fA-F]/
-                       (lambda (m) (string-upcase (m 0)))))
-
 
 ;; Normalize request url.  (Section 9.1.2)
 (define (oauth-normalize-request-url url)
@@ -203,20 +192,6 @@
           :access-token-secret a-secret))
       #f)))
 
-;;;
-;;; Internal utilities
-;;;
-
-(define (default-input-callback url)
-  (print "Open the following url and type in the shown PIN.")
-  (print url)
-  (let loop ()
-    (display "Input PIN: ") (flush)
-    (let1 pin (read-line)
-      (cond [(eof-object? pin) #f]
-            [(string-null? pin) (loop)]
-            [else pin]))))
-
 (define (call/oauth parser cred method path params . opts)
   (define (call)
     (if cred
@@ -263,3 +238,29 @@
             headers))
 
   (call-with-values call retrieve))
+
+;;;
+;;; Internal utilities
+;;;
+
+(define (default-input-callback url)
+  (print "Open the following url and type in the shown PIN.")
+  (print url)
+  (let loop ()
+    (display "Input PIN: ") (flush)
+    (let1 pin (read-line)
+      (cond [(eof-object? pin) #f]
+            [(string-null? pin) (loop)]
+            [else pin]))))
+
+(define (compose-query params)
+  (%-fix (http-compose-query #f params 'utf-8)))
+
+;; see `http-compose-form-data' comments
+(define (param-form-data? param)
+  (odd? (length param)))
+
+(define (%-fix str)
+  (regexp-replace-all* str #/%[\da-fA-F][\da-fA-F]/
+                       (lambda (m) (string-upcase (m 0)))))
+
