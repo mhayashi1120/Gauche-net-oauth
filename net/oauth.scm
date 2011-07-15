@@ -2,7 +2,7 @@
 ;;; Twitter access module
 ;;;
 
-(define-module net.twitter
+(define-module net.oauth
   (use rfc.http)
   (use rfc.sha)
   (use rfc.hmac)
@@ -24,113 +24,9 @@
   (use sxml.ssax)
   (use sxml.sxpath)
   (use rfc.json)
-  (export <twitter-cred> <twitter-api-error>
-          twitter-authenticate-client
-          
-          twitter-public-timeline/sxml
-          twitter-home-timeline/sxml
-          twitter-user-timeline/sxml
-          twitter-mentions/sxml twitter-mentions
-
-          twitter-search/sxml
-
-          twitter-show/sxml
-          twitter-update/sxml twitter-update
-          twitter-destroy/sxml
-          twitter-retweet/sxml
-          twitter-retweets/sxml
-          twitter-retweeted-by/sxml
-          twitter-retweeted-by-ids/sxml
-
-          twitter-user-show/sxml
-          twitter-user-lookup/sxml
-          twitter-user-search/sxml
-          twitter-user-suggestions/sxml
-          twitter-user-suggestions/category/sxml
-
-          twitter-friends/ids/sxml twitter-friends/ids
-          twitter-followers/ids/sxml twitter-followers/ids
-
-          twitter-retweeted-to-me/sxml
-          twitter-retweeted-by-me/sxml
-          twitter-retweets-of-me/sxml
-
-          twitter-direct-messages/sxml
-          twitter-direct-messages-sent/sxml
-          twitter-direct-message-new/sxml
-          twitter-direct-message-destroy/sxml
-
-          twitter-friendship-show/sxml
-          twitter-friendship-exists/sxml twitter-friendship-exists?
-          twitter-friendship-create/sxml twitter-friendship-destroy/sxml
-          twitter-friendship-incoming/sxml twitter-friendship-outgoing/sxml
-          twitter-friendship-update/sxml
-
-          twitter-lists/sxml
-          twitter-lists/ids twitter-lists/slugs
-          twitter-list-show/sxml
-          twitter-list-statuses/sxml
-          twitter-list-create/sxml
-          twitter-list-create
-          twitter-list-update/sxml
-          twitter-list-destroy/sxml
-          twitter-list-members/sxml
-          twitter-list-member-show/sxml
-          twitter-list-member-create/sxml
-          twitter-list-members-create-all/sxml
-          twitter-list-member-destroy/sxml
-          twitter-list-members/ids
-          twitter-list-subscribers/sxml
-          twitter-list-subscriber-show/sxml
-          twitter-list-subscriber-create/sxml
-          twitter-list-subscriber-destroy/sxml
-          twitter-list-subscribers/ids
-          twitter-list-subscriptions/sxml twitter-list-subscriptions/ids
-          twitter-list-memberships/sxml twitter-list-memberships/ids
-
-          twitter-favorites/sxml
-          twitter-favorite-create/sxml
-          twitter-favorite-destroy/sxml
-
-          twitter-account-verify-credentials/sxml
-          twitter-account-totals/sxml
-          twitter-account-settings/sxml
-          twitter-account-settings-update/sxml
-          twitter-account-rate-limit-status/sxml
-          twitter-account-update-profile-image/sxml
-          twitter-account-update-profile-background-image/sxml
-          twitter-account-update-profile-colors/sxml
-          twitter-account-update-profile/sxml
-          twitter-account-verify-credentials?
-
-          twitter-notifications-follow/sxml
-          twitter-notifications-leave/sxml
-
-          twitter-blocks/sxml
-          twitter-blocks/ids/sxml
-          twitter-block-create/sxml
-          twitter-block-destroy/sxml
-          twitter-block-exists/sxml
-          twitter-block-exists?
-          twitter-blocks/ids
-
-          twitter-report-spam/sxml
-
-          twitter-saved-searches/sxml
-          twitter-saved-search-show/sxml
-          twitter-saved-search-create/sxml
-          twitter-saved-search-destroy/sxml
-
-          twitter-trends-available/sxml twitter-trends-location/sxml
-
-          twitter-legal-tos/sxml twitter-legal-privacy/sxml
-
-          twitter-help-test/sxml
-          twitter-help-languages/sxml twitter-help-configuration/sxml
-
-          twitter-open-stream
-          ))
-(select-module net.twitter)
+  (export 
+   ))
+(select-module net.oauth)
 
 ;; OAuth related stuff.
 ;; These may be factored out into net.oauth module someday.

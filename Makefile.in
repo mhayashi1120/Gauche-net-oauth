@@ -23,10 +23,10 @@ EXEEXT = @EXEEXT@
 LOCAL_PATHS = @LOCAL_PATHS@
 
 # Module-specific stuff
-PACKAGE   = Gauche-net-twitter
+PACKAGE   = Gauche-net-oauth
 
 ARCHFILES = 
-SCMFILES  = $(srcdir)/net/twitter.scm $(srcdir)/net/twitauth.scm $(srcdir)/net/favotter.scm
+SCMFILES  = $(srcdir)/net/oauth.scm
 HEADERS   = 
 
 TARGET    = $(ARCHFILES)

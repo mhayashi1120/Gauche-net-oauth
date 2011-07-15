@@ -6,12 +6,12 @@ Step by step:
 
    From tarball:
 
-     $ gauche-package install [-S root] Gauche-net-twitter-1.0.tgz
+     $ gauche-package install [-S root] Gauche-net-oauth-0.5.tgz
 
    From source:
 
-     $ git clone git://github.com/shirok/Gauche-net-twitter.git
-     $ cd Gauche-net-twitter
+     $ git clone git://github.com/mhayashi1120/Gauche-net-oauth.git
+     $ cd Gauche-net-oauth
      $ ./DIST gen
      $ ./configure
      $ make
@@ -31,7 +31,7 @@ Step by step:
    just want to grant your application to access *your* twitter account,
    there's a simple script net/twitauth.scm that handles the process.  Run
    it as 'gosh net/twitauth'.   (If you haven't installed the module,
-   cd to Gauche-net-twitter and run 'gosh -I. net/twitauth').
+   cd to Gauche-net-oauth and run 'gosh -I. net/twitauth').
    It asks you to type your application's consumer key and consumer secret.
 
      $ gosh net/twitauth
@@ -113,144 +113,9 @@ In both versions, if the server returns response other than 200,
 a condition <twitter-api-error> is signalled.
 
 
-[Module] net.twitter
+[Module] net.oauth
 
-[Class] <twitter-cred>
-
-  An object holding necessary information to access to the user's Twitter
-  account.  It has the following instance slots.
-
-   consumer-key
-   consumer-secret
-   access-token
-   access-token-secret
-
-[Condition type] <twitter-api-error>
-
-  A condition thrown when twitter server returns a response other
-  than 200.  The condition has the following slots.
-
-   status        (string) response status code, e.g. "403"
-   headers       (list of (string string)) list of response headers.
-   body          (string) response body, as is.
-   body-sxml     (maybe SXML) if response body is XML, it is parsed and
-                 SXML is set to this slots.  Otherwise it is #f.
-
-[Function] twitter-authenticate-client consumer-key consumer-secret
-                                       :optional input-callback
-
-  Authenticate the client using twitter's PIN-based OAuth authentication
-  flow.  First it obtains request-token, then ask the user to access
-  a specific URL to grant access by the client.  Once the user grant access,
-  Twitter presents a PIN to the user, which should be fed back
-  to the procedure to obtain access token and secret.
-
-  Once this process completes, the client program can store the access
-  token and access token secret to access the user's Twitter account,
-  until the user explicitly asks to discard those credentials.  So, 
-  in general, this procedure needs to be called once per user per client.
-
-  The INPUT-CALLBACK is a procedure that handles user intervention.
-  It is called by one argument, the Twitter URL the user should access.
-  By default it prints the URL and asks the user to go there and obtain
-  PIN, and prompts the user to enter it.  It should return the entered
-  PIN in string, or #f to indicate the user aborted the process.
-  If the callback returns an empty string, it is called again.
-
-  Twitter-authenticate-client returns an instance of <twitter-cred>.
-
-[Function] twitter-public-timeline/sxml
-
-  Access public timeline.  This API doesn't require authentication.
-
-[Function] twitter-home-timeline/sxml cred :key (since-id #f) (max-id #f)
-                                                (count #f) (page #f))
-
-  Access authenticated user's timeline.
-
-[Function] twitter-mentions/sxml cred :key (since-id #f) (max-id #f)
-                                           (count #f) (page #f))
-
-  Returns tweets that mentiones to the authenticated user.
-
-[Function] twitter-mentions cred :key (since-id #f) (max-id #f)
-                                      (count #f) (page #f))
-
-  The convenience version of twitter-mentions/sxml.   Returns a list
-  of those four elements, sorted in the reverse chronological order:
-    (tweet-id text user-screen-name user-id)
-
-[Function] twitter-show/sxml cred tweet-id
-
-  Returns a tweet specified by TWEET-ID.  CRED can be #f if accessing
-  to a public tweet.
-
-[Function] twitter-update/sxml cred message :key (in-reply-to-status-id #f)
-                                              (lat #f) (long #f) (place-id #f)
-                                              (display-coordinates #f))
-
-  Post MESSAGE to the authenticated user.
-
-[Function] twitter-update cred message :key (in-reply-to-status-id #f)
-                                            (lat #f) (long #f) (place-id #f)
-                                            (display-coordinates #f))
-
-  Post MESSAGE to the authenticated user, and returns the tweet id.
-
-[Function] twitter-destroy/sxml cred tweet-id
-
-  Delete a tweet specified by TWEET-ID.
-
-[Function] twitter-retweet/sxml cred tweet-id
-
-  Retweet a tweet specified by TWEET-ID.
-
-[Function] twitter-retweets/sxml cred tweet-id :key (count #f)
-
-  Returns info of retweets of the specified tweet-id.
-
-[Function] twitter-retweeted-by/sxml cred tweet-id :key (count #f) (page #f)
-
-  Returns a list of users who retweeted the specified tweet.
-
-[Function] twitter-retweeted-by-ids/sxml cred tweet-id
-                                         :key (count #f) (page #f)
-
-  Returns a list of user ids who retweeted the specified tweet.
-
-[Function] twitter-user-show/sxml cred :key id user-id screen-name
-
-  Show info of the user.  CRED can be #f to access only public info.
-
-[Function] twitter-user-lookup/sxml cred :key (user-ids '()) (screen-names '())
-
-  Returns info on the user listed in either user-ids or screen-names.
-
-[Function] twitter-user-search/sxml cred q :key per-page page
-
-  Search users matching the query Q.
-
-[Function] twitter-friends/sxml cred :key id user-id screen-name cursor
-
-  Returns list of friends of the user specified by either id, user-id,
-  or screen-name.
-
-[Function] twitter-friends/ids cred :key id user-id screen-name cursor
-
-  Like above, but returns a list of user ids.
-
-
-[Function] twitter-followers/sxml cred :key id user-id screen-name cursor
-
-  Returns list of users following the user specified by either id, user-id,
-  or screen-name.  This uses statuses/followers API.
-
-[Function] twitter-followers/ids cred :key id user-id screen-name
-
-  Like above, but returns a list of user ids.  This uses followers/ids API,
-  and handles pagenation automatically to retrieve entire list of
-  followers.
-
+TODO
 
 
 Credits:
