@@ -159,22 +159,6 @@
                                  ,(oauth-uri-encode signature))))
                          ", "))))
 
-;;
-;; A convenience macro to construct query parameters, skipping
-;; if #f is given to the variable.
-;;
-
-(define-macro (make-query-params . vars)
-  `(cond-list
-    ,@(map (lambda (v)
-             `(,v `(,',(string-tr (x->string v) "-" "_") ,(param->string ,v))))
-           vars)))
-
-(define (param->string v)
-  (cond
-   [(eq? v #t) "t"]
-   [else (x->string v)]))
-
 ;;;
 ;;; Public API
 ;;;
