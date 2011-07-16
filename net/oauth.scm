@@ -22,10 +22,21 @@
   (use util.list)
   (use util.match)
   (export 
+   <oauth-cred>
+
+   oauth-client-authenticator
    oauth-auth-header
    call/oauth
    ))
 (select-module net.oauth)
+
+(define-class <oauth-cred> ()
+  ((consumer-key :init-keyword :consumer-key)
+   (consumer-secret :init-keyword :consumer-secret)
+   (access-token :init-keyword :access-token)
+   (access-token-secret :init-keyword :access-token-secret)))
+
+;; todo http://tools.ietf.org/html/rfc5849
 
 ;; OAuth related stuff.
 ;; References to the section numbers refer to http://oauth.net/core/1.0/.
@@ -68,8 +79,9 @@
     (or (null? list)
         (and (not (param-form-data? (car list)))
              (only-query-string? (cdr list)))))
+
   (if (only-query-string? params)
-    (compose-query params)
+    (%-fix (http-compose-query #f params 'utf-8))
     (http-compose-form-data params #f 'utf-8)))
 
 ;; Normalize request url.  (Section 9.1.2)
@@ -152,51 +164,67 @@
 ;;; Public API
 ;;;
 
+(define (oauth-authenticate-consumer consumer-key consumer-secret)
+  )
+
 ;;
 ;; Authenticate the client using OAuth PIN-based authentication flow.
 ;;
-(define (twitter-authenticate-client consumer-key consumer-secret
-                                     :optional (input-callback
-                                                default-input-callback))
-  (let* ([r-response
-          (oauth-request "GET" "http://api.twitter.com/oauth/request_token"
-                         `(("oauth_consumer_key" ,consumer-key)
-                           ("oauth_signature_method" "HMAC-SHA1")
-                           ("oauth_timestamp" ,(timestamp))
-                           ("oauth_nonce" ,(oauth-nonce))
-                           ("oauth_version" "1.0"))
-                         consumer-secret)]
-         [r-token  (cgi-get-parameter "oauth_token" r-response)]
-         [r-secret (cgi-get-parameter "oauth_token_secret" r-response)])
-    (unless (and r-token r-secret)
-      (error "failed to obtain request token"))
-    (if-let1 oauth-verifier
-        (input-callback
-         #`"https://api.twitter.com/oauth/authorize?oauth_token=,r-token")
-      (let* ([a-response
-              (oauth-request "POST" "http://api.twitter.com/oauth/access_token"
-                             `(("oauth_consumer_key" ,consumer-key)
-                               ("oauth_token" ,r-token)
-                               ("oauth_signature_method" "HMAC-SHA1")
-                               ("oauth_timestamp" ,(timestamp))
-                               ("oauth_nonce" ,(oauth-nonce))
-                               ("oauth_version" "1.0")
-                               ("oauth_verifier" ,oauth-verifier))
-                             r-secret)]
-             [a-token (cgi-get-parameter "oauth_token" a-response)]
-             [a-secret (cgi-get-parameter "oauth_token_secret" a-response)])
-        (make <twitter-cred>
-          :consumer-key consumer-key
-          :consumer-secret consumer-secret
-          :access-token a-token
-          :access-token-secret a-secret))
-      #f)))
+
+(define (oauth-client-authenticator request-url access-token-url authorize-url)
+
+  (define (default-input-callback url)
+    (print "Open the following url and type in the shown PIN.")
+    (print url)
+    (let loop ()
+      (display "Input PIN: ") (flush)
+      (let1 pin (read-line)
+        (cond [(eof-object? pin) #f]
+              [(string-null? pin) (loop)]
+              [else pin]))))
+
+  (lambda (consumer-key consumer-secret
+                        :optional (input-callback default-input-callback))
+    (let* ([r-response
+            (oauth-request "GET" request-url
+                           `(("oauth_consumer_key" ,consumer-key)
+                             ("oauth_signature_method" "HMAC-SHA1")
+                             ("oauth_timestamp" ,(timestamp))
+                             ("oauth_nonce" ,(oauth-nonce))
+                             ("oauth_version" "1.0"))
+                           consumer-secret)]
+           [r-token  (cgi-get-parameter "oauth_token" r-response)]
+           [r-secret (cgi-get-parameter "oauth_token_secret" r-response)])
+      (unless (and r-token r-secret)
+        (error "failed to obtain request token"))
+      (if-let1 oauth-verifier
+          (input-callback
+           #`",|authorize-url|?oauth_token=,|r-token|")
+        (let* ([a-response
+                (oauth-request "POST" access-token-url
+                               `(("oauth_consumer_key" ,consumer-key)
+                                 ("oauth_token" ,r-token)
+                                 ("oauth_signature_method" "HMAC-SHA1")
+                                 ("oauth_timestamp" ,(timestamp))
+                                 ("oauth_nonce" ,(oauth-nonce))
+                                 ("oauth_version" "1.0")
+                                 ("oauth_verifier" ,oauth-verifier))
+                               r-secret)]
+               [a-token (cgi-get-parameter "oauth_token" a-response)]
+               [a-secret (cgi-get-parameter "oauth_token_secret" a-response)])
+          (make <oauth-cred>
+            :consumer-key consumer-key
+            :consumer-secret consumer-secret
+            :access-token a-token
+            :access-token-secret a-secret))
+        #f))))
 
 (define (call/oauth parser cred method path params . opts)
   (define (call)
     (if cred
       (let1 auth (oauth-auth-header
                   (if (eq? method 'get) "GET" "POST")
+                  ;;TODO https?
                   #`"http://api.twitter.com,|path|" params
                   (~ cred'consumer-key) (~ cred'consumer-secret)
                   (~ cred'access-token) (~ cred'access-token-secret))
@@ -224,6 +252,7 @@
   (define (call)
     (let1 auth (oauth-auth-header
                 "POST"
+                ;;TODO https?
                 #`"http://api.twitter.com,|path|" '()
                 (~ cred'consumer-key) (~ cred'consumer-secret)
                 (~ cred'access-token) (~ cred'access-token-secret))
@@ -242,19 +271,6 @@
 ;;;
 ;;; Internal utilities
 ;;;
-
-(define (default-input-callback url)
-  (print "Open the following url and type in the shown PIN.")
-  (print url)
-  (let loop ()
-    (display "Input PIN: ") (flush)
-    (let1 pin (read-line)
-      (cond [(eof-object? pin) #f]
-            [(string-null? pin) (loop)]
-            [else pin]))))
-
-(define (compose-query params)
-  (%-fix (http-compose-query #f params 'utf-8)))
 
 ;; see `http-compose-form-data' comments
 (define (param-form-data? param)
