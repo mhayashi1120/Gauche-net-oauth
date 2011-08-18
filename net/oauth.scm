@@ -45,20 +45,20 @@
 ;; Returns query parameters with calculated "oauth_signature"
 (define (oauth-add-signature method request-url params consumer-secret
                              :optional (token-secret ""))
-  `(,@params
-    ("oauth_signature" ,(oauth-signature method request-url params
-                                         consumer-secret token-secret))))
+  ;; Calculate signature.
+  (define (signature method request-url params consumer-secret
+                           :optional (token-secret ""))
+    (base64-encode-string
+     (hmac-digest-string (signature-base-string method request-url params)
+                         :key #`",|consumer-secret|&,|token-secret|"
+                         :hasher <sha1>)))
 
-;; Calculate signature.
-(define (oauth-signature method request-url params consumer-secret
-                         :optional (token-secret ""))
-  (base64-encode-string
-   (hmac-digest-string (oauth-signature-base-string method request-url params)
-                       :key #`",|consumer-secret|&,|token-secret|"
-                       :hasher <sha1>)))
+  `(,@params
+    ("oauth_signature" ,(signature method request-url params
+                                   consumer-secret token-secret))))
 
 ;; Construct signature base string. (Section 9.1)
-(define (oauth-signature-base-string method request-url params)
+(define (signature-base-string method request-url params)
   (define (param-sorter a b)
     (or (string<? (car a) (car b))
         (and (string=? (car a) (car b))
