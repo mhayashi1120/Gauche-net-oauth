@@ -20,9 +20,9 @@
    <oauth-cred>
 
    oauth-client-authenticator
-   oauth-authenticate-sender
-   oauth-authorizer
-   oauth-authenticate-url
+   oauth-temporary-credential
+   oauth-access-token
+   oauth-authorize-constructor
 
    oauth-auth-header oauth-compose-query
    ))
@@ -172,6 +172,7 @@
     (receive (r-token r-secret)
         (request-sender consumer-key consumer-secret)
       (if-let1 oauth-verifier
+          ;;TODO
           (input-callback (owner-url r-token))
         (receive (a-token a-secret)
             (authorizer 
@@ -184,7 +185,7 @@
             :access-token-secret a-secret))
         #f))))
 
-(define (oauth-authenticate-sender request-url)
+(define (oauth-temporary-credential request-url)
   (lambda (consumer-key consumer-secret)
     (let* ([r-response
             (oauth-request "GET" request-url
@@ -200,7 +201,7 @@
         (error "failed to obtain request token"))
       (values r-token r-secret))))
 
-(define (oauth-authenticate-url authorize-url)
+(define (oauth-authorize-constructor authorize-url)
   (lambda (oauth-token :key (oauth-callback #f)
                        :allow-other-keys params)
     (when (odd? (length params))
@@ -222,7 +223,7 @@
                           res)))))))
       #`",|authorize-url|?,|query|")))
 
-(define (oauth-authorizer authorize-url)
+(define (oauth-access-token authorize-url)
   (lambda (c-key verifier r-token r-secret)
     (let* ([a-response
             (oauth-request "POST" authorize-url
