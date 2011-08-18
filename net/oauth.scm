@@ -26,7 +26,6 @@
 
    oauth-client-authenticator
    oauth-auth-header
-   call/oauth
    ))
 (select-module net.oauth)
 
@@ -84,6 +83,8 @@
     (%-fix (http-compose-query #f params 'utf-8))
     (http-compose-form-data params #f 'utf-8)))
 
+;;TODO 5.4.2 WWW-Authenticate
+
 ;; Normalize request url.  (Section 9.1.2)
 (define (oauth-normalize-request-url url)
   (receive (scheme userinfo host port path query frag) (uri-parse url)
@@ -139,11 +140,9 @@
 
 ;; Returns a header field suitable to pass as :authorization header
 ;; for http-post/http-get.
-(define (oauth-auth-header method request-url params
-                           consumer-key consumer-secret
-                           access-token access-token-secret)
-  (let* ([auth-params `(("oauth_consumer_key" ,consumer-key)
-                        ("oauth_token" ,access-token)
+(define (oauth-auth-header method request-url params cred)
+  (let* ([auth-params `(("oauth_consumer_key" ,(~ cred'consumer-key))
+                        ("oauth_token" ,(~ cred'access-token))
                         ("oauth_signature_method" "HMAC-SHA1")
                         ("oauth_timestamp" ,(timestamp))
                         ("oauth_nonce" ,(oauth-nonce))
@@ -151,8 +150,8 @@
          [signature (oauth-signature
                      method request-url
                      `(,@auth-params ,@params)
-                     consumer-secret
-                     access-token-secret)])
+                     (~ cred'consumer-secret)
+                     (~ cred'access-token-secret))])
     (format "OAuth ~a"
             (string-join (map (^p (format "~a=\"~a\"" (car p) (cadr p)))
                               `(,@auth-params
@@ -185,33 +184,15 @@
 
   (lambda (consumer-key consumer-secret
                         :optional (input-callback default-input-callback))
-    (let* ([r-response
-            (oauth-request "GET" request-url
-                           `(("oauth_consumer_key" ,consumer-key)
-                             ("oauth_signature_method" "HMAC-SHA1")
-                             ("oauth_timestamp" ,(timestamp))
-                             ("oauth_nonce" ,(oauth-nonce))
-                             ("oauth_version" "1.0"))
-                           consumer-secret)]
-           [r-token  (cgi-get-parameter "oauth_token" r-response)]
-           [r-secret (cgi-get-parameter "oauth_token_secret" r-response)])
-      (unless (and r-token r-secret)
-        (error "failed to obtain request token"))
+    (receive (r-token r-secret)
+        ((oauth-authenticate-sender request-url) consumer-key consumer-secret)
       (if-let1 oauth-verifier
           (input-callback
            #`",|authorize-url|?oauth_token=,|r-token|")
-        (let* ([a-response
-                (oauth-request "POST" access-token-url
-                               `(("oauth_consumer_key" ,consumer-key)
-                                 ("oauth_token" ,r-token)
-                                 ("oauth_signature_method" "HMAC-SHA1")
-                                 ("oauth_timestamp" ,(timestamp))
-                                 ("oauth_nonce" ,(oauth-nonce))
-                                 ("oauth_version" "1.0")
-                                 ("oauth_verifier" ,oauth-verifier))
-                               r-secret)]
-               [a-token (cgi-get-parameter "oauth_token" a-response)]
-               [a-secret (cgi-get-parameter "oauth_token_secret" a-response)])
+        (receive (a-token a-secret)
+            ((oauth-authorizor authorize-url) 
+             consumer-key oauth-verifier
+             r-token r-secret)
           (make <oauth-cred>
             :consumer-key consumer-key
             :consumer-secret consumer-secret
@@ -219,54 +200,39 @@
             :access-token-secret a-secret))
         #f))))
 
-(define (call/oauth parser cred method path params . opts)
-  (define (call)
-    (if cred
-      (let1 auth (oauth-auth-header
-                  (if (eq? method 'get) "GET" "POST")
-                  ;;TODO https?
-                  #`"http://api.twitter.com,|path|" params
-                  (~ cred'consumer-key) (~ cred'consumer-secret)
-                  (~ cred'access-token) (~ cred'access-token-secret))
-        (case method
-          [(get) (apply http-get "api.twitter.com"
-                        #`",|path|?,(oauth-compose-query params)"
-                        :Authorization auth opts)]
-          [(post) (apply http-post "api.twitter.com" path
-                         (oauth-compose-query params)
-                         :Authorization auth opts)]))
-      (case method
-        [(get) (apply http-get "api.twitter.com"
-                      #`",|path|?,(oauth-compose-query params)" opts)]
-        [(post) (apply http-post "api.twitter.com" path
-                       (oauth-compose-query params) opts)])))
+(define (oauth-authorizor authorize-url)
+  (lambda (c-key verifier r-token r-secret)
+    (let* ([a-response
+            (oauth-request "POST" authorize-url
+                           `(("oauth_consumer_key" ,c-key)
+                             ("oauth_nonce" ,(oauth-nonce))
+                             ("oauth_signature_method" "HMAC-SHA1")
+                             ("oauth_timestamp" ,(timestamp))
+                             ("oauth_token" ,r-token)
+                             ("oauth_verifier" ,verifier)
+                             ("oauth_version" "1.0"))
+                           r-secret)]
+           [a-token (cgi-get-parameter "oauth_token" a-response)]
+           [a-secret (cgi-get-parameter "oauth_token_secret" a-response)])
+      (unless (and a-token a-secret)
+        (error "failed to obtain access token"))
+      (values a-token a-secret))))
 
-  (define (retrieve status headers body)
-    (check-api-error status headers body)
-    (values (parser body) headers))
-
-  (call-with-values call retrieve))
-
-(define (call/oauth-post-file->sxml cred path params . opts)
-
-  (define (call)
-    (let1 auth (oauth-auth-header
-                "POST"
-                ;;TODO https?
-                #`"http://api.twitter.com,|path|" '()
-                (~ cred'consumer-key) (~ cred'consumer-secret)
-                (~ cred'access-token) (~ cred'access-token-secret))
-      (hack-mime-composing 
-       (apply http-post "api.twitter.com" path
-              params
-              :Authorization auth opts))))
-
-  (define (retrieve status headers body)
-    (check-api-error status headers body)
-    (values (call-with-input-string body (cut ssax:xml->sxml <> '()))
-            headers))
-
-  (call-with-values call retrieve))
+(define (oauth-authenticate-sender request-url)
+  (lambda (consumer-key consumer-secret)
+    (let* ([r-response
+            (oauth-request "GET" request-url
+                           `(("oauth_consumer_key" ,consumer-key)
+                             ("oauth_nonce" ,(oauth-nonce))
+                             ("oauth_signature_method" "HMAC-SHA1")
+                             ("oauth_timestamp" ,(timestamp))
+                             ("oauth_version" "1.0"))
+                           consumer-secret)]
+           [r-token  (cgi-get-parameter "oauth_token" r-response)]
+           [r-secret (cgi-get-parameter "oauth_token_secret" r-response)])
+      (unless (and r-token r-secret)
+        (error "failed to obtain request token"))
+      (values r-token r-secret))))
 
 ;;;
 ;;; Internal utilities
@@ -276,6 +242,7 @@
 (define (param-form-data? param)
   (odd? (length param)))
 
+;; 5.1.  Parameter Encoding
 (define (%-fix str)
   (regexp-replace-all* str #/%[\da-fA-F][\da-fA-F]/
                        (lambda (m) (string-upcase (m 0)))))
