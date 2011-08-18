@@ -163,9 +163,6 @@
 ;;; Public API
 ;;;
 
-(define (oauth-authenticate-consumer consumer-key consumer-secret)
-  )
-
 ;;
 ;; Authenticate the client using OAuth PIN-based authentication flow.
 ;;
