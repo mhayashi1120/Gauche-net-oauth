@@ -8,8 +8,6 @@
   (use rfc.hmac)
   (use rfc.base64)
   (use rfc.uri)
-  (use rfc.822)
-  (use rfc.mime)
   (use srfi-1)
   (use srfi-13)
   (use www.cgi)
@@ -18,15 +16,14 @@
   (use gauche.version)
   (use gauche.experimental.ref)         ; for '~'.  remove after 0.9.1
   (use text.tree)
-  (use text.tr)
-  (use util.list)
-  (use util.match)
   (export 
    <oauth-cred>
 
    oauth-client-authenticator
    oauth-authenticate-sender
    oauth-authorizer
+   oauth-authenticate-url
+
    oauth-auth-header oauth-compose-query
    ))
 (select-module net.oauth)
@@ -158,7 +155,7 @@
 ;; Authenticate the client using OAuth PIN-based authentication flow.
 ;;
 
-(define (oauth-client-authenticator request-url access-token-url authorize-url)
+(define (oauth-client-authenticator request-sender owner-url authorizer)
 
   (define (default-input-callback url)
     (print "Open the following url and type in the shown PIN.")
@@ -173,12 +170,11 @@
   (lambda (consumer-key consumer-secret
                         :optional (input-callback default-input-callback))
     (receive (r-token r-secret)
-        ((oauth-authenticate-sender request-url) consumer-key consumer-secret)
+        (request-sender consumer-key consumer-secret)
       (if-let1 oauth-verifier
-          (input-callback
-           #`",|authorize-url|?oauth_token=,|r-token|")
+          (input-callback (owner-url))
         (receive (a-token a-secret)
-            ((oauth-authorizer authorize-url) 
+            (authorizer 
              consumer-key oauth-verifier
              r-token r-secret)
           (make <oauth-cred>
@@ -222,6 +218,28 @@
         (error "failed to obtain request token"))
       (values r-token r-secret))))
 
+(define (oauth-authenticate-url authorize-url)
+  (lambda (oauth-token :key (oauth-callback #f)
+                       :allow-other-keys params)
+    (when (odd? (length params))
+      (error "Keywords are not even."))
+    (let1 query 
+        (compose-query 
+         `(
+           ("oauth_token" ,oauth-token)
+           ,@(if oauth-callback `(("oauth_callback" ,oauth-callback)) '())
+           ,@(let loop ((params params)
+                        (res '()))
+               (if (null? params)
+                 (reverse res)
+                 (let ((k (car params))
+                       (v (cadr params)))
+                   (loop (cddr params) 
+                         (cons 
+                          `(,(x->string k) ,(x->string v))
+                          res)))))))
+      #`",|authorize-url|?,|query|")))
+
 ;;;
 ;;; Internal utilities
 ;;;
@@ -244,4 +262,8 @@
 (define (%-fix str)
   (regexp-replace-all* str #/%[\da-fA-F][\da-fA-F]/
                        (lambda (m) (string-upcase (m 0)))))
+
+(define (compose-query params)
+  (%-fix (http-compose-query #f params 'utf-8)))
+
 
