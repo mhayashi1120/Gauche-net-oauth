@@ -172,7 +172,7 @@
     (receive (r-token r-secret)
         (request-sender consumer-key consumer-secret)
       (if-let1 oauth-verifier
-          (input-callback (owner-url))
+          (input-callback (owner-url r-token))
         (receive (a-token a-secret)
             (authorizer 
              consumer-key oauth-verifier
@@ -183,24 +183,6 @@
             :access-token a-token
             :access-token-secret a-secret))
         #f))))
-
-(define (oauth-authorizer authorize-url)
-  (lambda (c-key verifier r-token r-secret)
-    (let* ([a-response
-            (oauth-request "POST" authorize-url
-                           `(("oauth_consumer_key" ,c-key)
-                             ("oauth_nonce" ,(oauth-nonce))
-                             ("oauth_signature_method" "HMAC-SHA1")
-                             ("oauth_timestamp" ,(timestamp))
-                             ("oauth_token" ,r-token)
-                             ("oauth_verifier" ,verifier)
-                             ("oauth_version" "1.0"))
-                           r-secret)]
-           [a-token (cgi-get-parameter "oauth_token" a-response)]
-           [a-secret (cgi-get-parameter "oauth_token_secret" a-response)])
-      (unless (and a-token a-secret)
-        (error "failed to obtain access token"))
-      (values a-token a-secret))))
 
 (define (oauth-authenticate-sender request-url)
   (lambda (consumer-key consumer-secret)
@@ -239,6 +221,24 @@
                           `(,(x->string k) ,(x->string v))
                           res)))))))
       #`",|authorize-url|?,|query|")))
+
+(define (oauth-authorizer authorize-url)
+  (lambda (c-key verifier r-token r-secret)
+    (let* ([a-response
+            (oauth-request "POST" authorize-url
+                           `(("oauth_consumer_key" ,c-key)
+                             ("oauth_nonce" ,(oauth-nonce))
+                             ("oauth_signature_method" "HMAC-SHA1")
+                             ("oauth_timestamp" ,(timestamp))
+                             ("oauth_token" ,r-token)
+                             ("oauth_verifier" ,verifier)
+                             ("oauth_version" "1.0"))
+                           r-secret)]
+           [a-token (cgi-get-parameter "oauth_token" a-response)]
+           [a-secret (cgi-get-parameter "oauth_token_secret" a-response)])
+      (unless (and a-token a-secret)
+        (error "failed to obtain access token"))
+      (values a-token a-secret))))
 
 ;;;
 ;;; Internal utilities
