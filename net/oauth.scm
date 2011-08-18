@@ -155,25 +155,13 @@
 ;; Authenticate the client using OAuth PIN-based authentication flow.
 ;;
 
-(define (oauth-client-authenticator request-sender owner-url authorizer)
+(define (oauth-client-authenticator request-sender authorizer)
 
-  (define (default-input-callback url)
-    (print "Open the following url and type in the shown PIN.")
-    (print url)
-    (let loop ()
-      (display "Input PIN: ") (flush)
-      (let1 pin (read-line)
-        (cond [(eof-object? pin) #f]
-              [(string-null? pin) (loop)]
-              [else pin]))))
-
-  (lambda (consumer-key consumer-secret
-                        :optional (input-callback default-input-callback))
+  (lambda (consumer-key consumer-secret input-callback)
     (receive (r-token r-secret)
         (request-sender consumer-key consumer-secret)
       (if-let1 oauth-verifier
-          ;;TODO
-          (input-callback (owner-url r-token))
+          (input-callback r-token)
         (receive (a-token a-secret)
             (authorizer 
              consumer-key oauth-verifier
