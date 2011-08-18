@@ -25,7 +25,9 @@
    <oauth-cred>
 
    oauth-client-authenticator
-   oauth-auth-header
+   oauth-authenticate-sender
+   oauth-authorizer
+   oauth-auth-header oauth-compose-query
    ))
 (select-module net.oauth)
 
@@ -187,7 +189,7 @@
           (input-callback
            #`",|authorize-url|?oauth_token=,|r-token|")
         (receive (a-token a-secret)
-            ((oauth-authorizor authorize-url) 
+            ((oauth-authorizer authorize-url) 
              consumer-key oauth-verifier
              r-token r-secret)
           (make <oauth-cred>
@@ -197,7 +199,7 @@
             :access-token-secret a-secret))
         #f))))
 
-(define (oauth-authorizor authorize-url)
+(define (oauth-authorizer authorize-url)
   (lambda (c-key verifier r-token r-secret)
     (let* ([a-response
             (oauth-request "POST" authorize-url
