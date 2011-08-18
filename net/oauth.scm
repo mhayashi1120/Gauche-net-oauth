@@ -151,28 +151,6 @@
 ;;; Public API
 ;;;
 
-;;
-;; Authenticate the client using OAuth PIN-based authentication flow.
-;;
-
-(define (oauth-client-authenticator request-sender authorizer)
-
-  (lambda (consumer-key consumer-secret input-callback)
-    (receive (r-token r-secret)
-        (request-sender consumer-key consumer-secret)
-      (if-let1 oauth-verifier
-          (input-callback r-token)
-        (receive (a-token a-secret)
-            (authorizer 
-             consumer-key oauth-verifier
-             r-token r-secret)
-          (make <oauth-cred>
-            :consumer-key consumer-key
-            :consumer-secret consumer-secret
-            :access-token a-token
-            :access-token-secret a-secret))
-        #f))))
-
 (define (oauth-temporary-credential request-url)
   (lambda (consumer-key consumer-secret)
     (let* ([r-response
@@ -228,6 +206,28 @@
       (unless (and a-token a-secret)
         (error "failed to obtain access token"))
       (values a-token a-secret))))
+
+;;
+;; Authenticate the client.
+;;
+
+(define (oauth-client-authenticator request-sender authorizer)
+
+  (lambda (consumer-key consumer-secret input-callback)
+    (receive (r-token r-secret)
+        (request-sender consumer-key consumer-secret)
+      (if-let1 oauth-verifier
+          (input-callback r-token)
+        (receive (a-token a-secret)
+            (authorizer 
+             consumer-key oauth-verifier
+             r-token r-secret)
+          (make <oauth-cred>
+            :consumer-key consumer-key
+            :consumer-secret consumer-secret
+            :access-token a-token
+            :access-token-secret a-secret))
+        #f))))
 
 ;;;
 ;;; Internal utilities
