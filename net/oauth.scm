@@ -130,25 +130,15 @@
                   status body))
         (cgi-parse-parameters :query-string body)))))
 
-(define (timestamp) (number->string (sys-time)))
-
-(define oauth-nonce
-  (let ([random-source (make <mersenne-twister>
-                         :seed (* (sys-time) (sys-getpid)))]
-        [v (make-u32vector 10)])
-    (lambda ()
-      (mt-random-fill-u32vector! random-source v)
-      (digest-hexify (sha1-digest-string (x->string v))))))
-
 ;; Returns a header field suitable to pass as :authorization header
 ;; for http-post/http-get.
 (define (oauth-auth-header method request-url params cred)
-  (let* ([auth-params `(("oauth_consumer_key" ,(~ cred'consumer-key))
-                        ("oauth_token" ,(~ cred'access-token))
-                        ("oauth_signature_method" "HMAC-SHA1")
-                        ("oauth_timestamp" ,(timestamp))
-                        ("oauth_nonce" ,(oauth-nonce))
-                        ("oauth_version" "1.0"))])
+  (let ([auth-params `(("oauth_consumer_key" ,(~ cred'consumer-key))
+                       ("oauth_token" ,(~ cred'access-token))
+                       ("oauth_signature_method" "HMAC-SHA1")
+                       ("oauth_timestamp" ,(timestamp))
+                       ("oauth_nonce" ,(oauth-nonce))
+                       ("oauth_version" "1.0"))])
     (format "OAuth ~a"
             (string-join (map (^p (format "~a=\"~a\"" (car p) (cadr p)))
                               (oauth-add-signature 
@@ -231,6 +221,16 @@
 ;;;
 ;;; Internal utilities
 ;;;
+
+(define (timestamp) (number->string (sys-time)))
+
+(define oauth-nonce
+  (let ([random-source (make <mersenne-twister>
+                         :seed (* (sys-time) (sys-getpid)))]
+        [v (make-u32vector 10)])
+    (lambda ()
+      (mt-random-fill-u32vector! random-source v)
+      (digest-hexify (sha1-digest-string (x->string v))))))
 
 ;; see `http-compose-form-data' comments
 (define (param-form-data? param)
