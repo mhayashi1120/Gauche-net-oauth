@@ -140,10 +140,14 @@
                        ("oauth_nonce" ,(oauth-nonce))
                        ("oauth_version" "1.0"))])
     (format "OAuth ~a"
-            (string-join (map (^p (format "~a=\"~a\"" (car p) (cadr p)))
-                              (oauth-add-signature 
-                               method request-url auth-params
-                               (~ cred'consumer-secret) (~ cred'access-token-secret)))
+            (string-join (map 
+                          (^p 
+                           (let ((k (car p))
+                                 (v (cadr p)))
+                             #`",|k|=\",|v|\""))
+                          (oauth-add-signature 
+                           method request-url auth-params
+                           (~ cred'consumer-secret) (~ cred'access-token-secret)))
                          ", "))))
 
 ;;;
