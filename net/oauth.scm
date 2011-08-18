@@ -148,17 +148,12 @@
                         ("oauth_signature_method" "HMAC-SHA1")
                         ("oauth_timestamp" ,(timestamp))
                         ("oauth_nonce" ,(oauth-nonce))
-                        ("oauth_version" "1.0"))]
-         [signature (oauth-signature
-                     method request-url
-                     `(,@auth-params ,@params)
-                     (~ cred'consumer-secret)
-                     (~ cred'access-token-secret))])
+                        ("oauth_version" "1.0"))])
     (format "OAuth ~a"
             (string-join (map (^p (format "~a=\"~a\"" (car p) (cadr p)))
-                              `(,@auth-params
-                                ("oauth_signature"
-                                 ,(oauth-uri-encode signature))))
+                              (oauth-add-signature 
+                               method request-url auth-params
+                               (~ cred'consumer-secret) (~ cred'access-token-secret)))
                          ", "))))
 
 ;;;
