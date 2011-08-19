@@ -43,16 +43,14 @@
 (define (oauth-add-signature method request-url params consumer-secret
                              :optional (token-secret ""))
   ;; Calculate signature.
-  (define (signature method request-url params consumer-secret
-                           :optional (token-secret ""))
+  (define (signature)
     (base64-encode-string
      (hmac-digest-string (signature-base-string method request-url params)
                          :key #`",|consumer-secret|&,|token-secret|"
                          :hasher <sha1>)))
 
   `(,@params
-    ("oauth_signature" ,(signature method request-url params
-                                   consumer-secret token-secret))))
+    ("oauth_signature" ,(signature))))
 
 ;; Construct signature base string. (Section 9.1)
 (define (signature-base-string method request-url params)
@@ -127,25 +125,26 @@
                   status body))
         (cgi-parse-parameters :query-string body)))))
 
+;; Section 5.4.1: Authorization Header
 ;; Returns a header field suitable to pass as :authorization header
 ;; for http-post/http-get.
-(define (oauth-auth-header method request-url params cred)
-  (let ([auth-params `(("oauth_consumer_key" ,(~ cred'consumer-key))
-                       ("oauth_token" ,(~ cred'access-token))
-                       ("oauth_signature_method" "HMAC-SHA1")
-                       ("oauth_timestamp" ,(timestamp))
-                       ("oauth_nonce" ,(oauth-nonce))
-                       ("oauth_version" "1.0"))])
-    (format "OAuth ~a"
-            (string-join (map 
-                          (^p 
-                           (let ((k (car p))
-                                 (v (cadr p)))
-                             #`",|k|=\",|v|\""))
-                          (oauth-add-signature 
-                           method request-url auth-params
-                           (~ cred'consumer-secret) (~ cred'access-token-secret)))
-                         ", "))))
+(define (oauth-auth-header method request-url cred :optional (realm #f))
+  (let* ([auth-params `(,@(if realm '(("realm" realm)) '())
+                        ("oauth_consumer_key" ,(~ cred'consumer-key))
+                        ("oauth_token" ,(~ cred'access-token))
+                        ("oauth_signature_method" "HMAC-SHA1")
+                        ("oauth_timestamp" ,(timestamp))
+                        ("oauth_nonce" ,(oauth-nonce))
+                        ("oauth_version" "1.0"))]
+         [params (map 
+                  (^p 
+                   (let ((k (car p))
+                         (v (cadr p)))
+                     #`",(oauth-uri-encode k)=\",(oauth-uri-encode v)\""))
+                  (oauth-add-signature 
+                   method request-url auth-params
+                   (~ cred'consumer-secret) (~ cred'access-token-secret)))])
+    (format "OAuth ~a" (string-join params ", "))))
 
 ;;;
 ;;; Public API
