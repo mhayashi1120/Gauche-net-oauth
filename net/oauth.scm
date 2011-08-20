@@ -128,14 +128,15 @@
 ;; Section 5.4.1: Authorization Header
 ;; Returns a header field suitable to pass as :authorization header
 ;; for http-post/http-get.
-(define (oauth-auth-header method request-url cred :optional (realm #f))
+(define (oauth-auth-header method request-url params cred :optional (realm #f))
   (let* ([auth-params `(,@(if realm '(("realm" realm)) '())
                         ("oauth_consumer_key" ,(~ cred'consumer-key))
-                        ("oauth_token" ,(~ cred'access-token))
+                        ("oauth_nonce" ,(oauth-nonce))
                         ("oauth_signature_method" "HMAC-SHA1")
                         ("oauth_timestamp" ,(timestamp))
-                        ("oauth_nonce" ,(oauth-nonce))
-                        ("oauth_version" "1.0"))]
+                        ("oauth_token" ,(~ cred'access-token))
+                        ("oauth_version" "1.0")
+                        ,@params)]
          [params (map 
                   (^p 
                    (let ((k (car p))
