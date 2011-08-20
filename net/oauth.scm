@@ -34,53 +34,49 @@
    (access-token :init-keyword :access-token)
    (access-token-secret :init-keyword :access-token-secret)))
 
-;; todo http://tools.ietf.org/html/rfc5849
+;; http://tools.ietf.org/html/rfc5849
 
 ;; OAuth related stuff.
 ;; References to the section numbers refer to http://oauth.net/core/1.0/.
 
-;; Returns query parameters with calculated "oauth_signature"
-(define (oauth-add-signature method request-url params consumer-secret
-                             :optional (token-secret ""))
+;; Signing Request (Section 9)
+;; Returns query calculated "oauth_signature" parameter.
+(define (oauth-signature method request-url oauth params consumer-secret token-secret)
   ;; Calculate signature.
-  (define (signature)
+  (define (signature normalized)
     (base64-encode-string
-     (hmac-digest-string (signature-base-string method request-url params)
+     (hmac-digest-string (signature-base-string method request-url normalized)
                          :key #`",|consumer-secret|&,|token-secret|"
                          :hasher <sha1>)))
 
-  `(,@params
-    ("oauth_signature" ,(signature))))
+  (define (oauth-params)
+    (filter (^x (string-prefix? "oauth_" (car x))) oauth))
+
+  (define (url-encoded-params)
+    (if (enable-urlencoded? params)
+      params
+      '()))
+
+  (define (normalize-params)
+    (append (oauth-params) (url-encoded-params)))
+
+  `("oauth_signature" ,(signature (normalize-params))))
 
 ;; Construct signature base string. (Section 9.1)
 (define (signature-base-string method request-url params)
+  (let1 normalized (oauth-normalize-parameters params)
+    (string-append
+     (string-upcase method) "&"
+     (oauth-uri-encode (oauth-normalize-request-url request-url)) "&"
+     (oauth-uri-encode (oauth-compose-query normalized)))))
+
+;; Normalize Request Parameters (Section 9.1.1)
+(define (oauth-normalize-parameters params)
   (define (param-sorter a b)
     (or (string<? (car a) (car b))
         (and (string=? (car a) (car b))
              (string<? (cadr a) (cadr b)))))
-  (let1 normalize-params (sort (remove param-form-data? params) param-sorter)
-    (string-append
-     (string-upcase method) "&"
-     (oauth-uri-encode (oauth-normalize-request-url request-url)) "&"
-     (oauth-uri-encode (oauth-compose-query normalize-params)))))
-
-;; Oauth requires hex digits in %-encodings to be upper case (Section 5.1)
-;; The following two routines should be used instead of uri-encode-string
-;; and http-compose-query to conform that.
-(define (oauth-uri-encode str)
-  (%-fix (uri-encode-string str :encoding 'utf-8)))
-
-(define (oauth-compose-query params)
-  (define (only-query-string? list)
-    (or (null? list)
-        (and (not (param-form-data? (car list)))
-             (only-query-string? (cdr list)))))
-
-  (if (only-query-string? params)
-    (%-fix (http-compose-query #f params 'utf-8))
-    (http-compose-form-data params #f 'utf-8)))
-
-;;TODO 5.4.2 WWW-Authenticate
+  (sort (remove param-form-data? params) param-sorter))
 
 ;; Normalize request url.  (Section 9.1.2)
 (define (oauth-normalize-request-url url)
@@ -97,11 +93,27 @@
                        `(":" ,port))
                     ,path))))
 
+;; Oauth requires hex digits in %-encodings to be upper case (Section 5.1)
+;; The following two routines should be used instead of uri-encode-string
+;; and http-compose-query to conform that.
+(define (oauth-uri-encode str)
+  (%-fix (uri-encode-string str :encoding 'utf-8)))
+
+(define (oauth-compose-query params)
+  (if (enable-urlencoded? params)
+    (%-fix (http-compose-query #f params 'utf-8))
+    (http-compose-form-data params #f 'utf-8)))
+
+;;TODO 5.4.2 WWW-Authenticate
+
 ;; Reqest either request token or access token.
-(define (oauth-request method request-url params consumer-secret
+(define (oauth-request method request-url oauth-params consumer-secret
                        :optional (token-secret ""))
   (define (add-sign meth)
-    (oauth-add-signature meth request-url params consumer-secret token-secret))
+    (let1 sign (oauth-signature meth request-url oauth-params '()
+                                consumer-secret token-secret)
+      `(,@oauth-params ,sign)))
+
   (receive (scheme specific) (uri-scheme&specific request-url)
     ;; https is supported since 0.9.1
     (define secure-opt
@@ -125,31 +137,30 @@
                   status body))
         (cgi-parse-parameters :query-string body)))))
 
+;;;
+;;; Public API
+;;;
+
 ;; Section 5.4.1: Authorization Header
 ;; Returns a header field suitable to pass as :authorization header
 ;; for http-post/http-get.
 (define (oauth-auth-header method request-url params cred :optional (realm #f))
-  (let* ([auth-params `(,@(if realm '(("realm" realm)) '())
-                        ("oauth_consumer_key" ,(~ cred'consumer-key))
-                        ("oauth_nonce" ,(oauth-nonce))
-                        ("oauth_signature_method" "HMAC-SHA1")
-                        ("oauth_timestamp" ,(timestamp))
-                        ("oauth_token" ,(~ cred'access-token))
-                        ("oauth_version" "1.0")
-                        ,@params)]
-         [params (map 
-                  (^p 
-                   (let ((k (car p))
-                         (v (cadr p)))
-                     #`",(oauth-uri-encode k)=\",(oauth-uri-encode v)\""))
-                  (oauth-add-signature 
-                   method request-url auth-params
-                   (~ cred'consumer-secret) (~ cred'access-token-secret)))])
-    (format "OAuth ~a" (string-join params ", "))))
-
-;;;
-;;; Public API
-;;;
+  (let* ([o-params `(,@(if realm '(("realm" realm)) '())
+                     ("oauth_consumer_key" ,(~ cred'consumer-key))
+                     ("oauth_nonce" ,(oauth-nonce))
+                     ("oauth_signature_method" "HMAC-SHA1")
+                     ("oauth_timestamp" ,(timestamp))
+                     ("oauth_token" ,(~ cred'access-token))
+                     ("oauth_version" "1.0"))]
+         [sign (oauth-signature method request-url o-params params
+                                (~ cred'consumer-secret) (~ cred'access-token-secret))]
+         [auth (map 
+                (^p 
+                 (let ((k (car p))
+                       (v (cadr p)))
+                   #`",(oauth-uri-encode k)=\",(oauth-uri-encode v)\""))
+                `(,@o-params ,sign))])
+    (format "OAuth ~a" (string-join auth ", "))))
 
 (define (oauth-temporary-credential request-url)
   (lambda (consumer-key consumer-secret)
@@ -246,6 +257,11 @@
 ;; see `http-compose-form-data' comments
 (define (param-form-data? param)
   (odd? (length param)))
+
+(define (enable-urlencoded? params)
+  (or (null? params)
+      (and (not (param-form-data? (car params)))
+           (enable-urlencoded? (cdr params)))))
 
 ;; 5.1.  Parameter Encoding
 (define (%-fix str)
