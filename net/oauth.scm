@@ -21,13 +21,15 @@
 
    oauth-client-authenticator
    oauth-temporary-credential
-   oauth-access-token
+   oauth-credential
    oauth-authorize-constructor
 
    oauth-auth-header oauth-compose-query
    ))
 (select-module net.oauth)
 
+;; Contain a authorize information about OAuth.
+;; Extend the class if there are any Additional parameters. (Section 7)
 (define-class <oauth-cred> ()
   ((consumer-key :init-keyword :consumer-key)
    (consumer-secret :init-keyword :consumer-secret)
@@ -43,11 +45,13 @@
 ;; Returns query calculated "oauth_signature" parameter.
 (define (oauth-signature method request-url oauth params consumer-secret token-secret)
   ;; Calculate signature.
-  (define (signature normalized)
-    (base64-encode-string
-     (hmac-digest-string (signature-base-string method request-url normalized)
-                         :key #`",|consumer-secret|&,|token-secret|"
-                         :hasher <sha1>)))
+  (define (signature)
+    (let1 normalized `(,@(oauth-params) 
+                       ,@(url-encoded-params))
+      (base64-encode-string
+       (hmac-digest-string (signature-base-string method request-url normalized)
+                           :key #`",|consumer-secret|&,|token-secret|"
+                           :hasher <sha1>))))
 
   (define (oauth-params)
     (filter (^x (string-prefix? "oauth_" (car x))) oauth))
@@ -57,10 +61,7 @@
       params
       '()))
 
-  (define (normalize-params)
-    (append (oauth-params) (url-encoded-params)))
-
-  `("oauth_signature" ,(signature (normalize-params))))
+  `("oauth_signature" ,(signature)))
 
 ;; Construct signature base string. (Section 9.1)
 (define (signature-base-string method request-url params)
@@ -162,7 +163,12 @@
                 `(,@o-params ,sign))])
     (format "OAuth ~a" (string-join auth ", "))))
 
-(define (oauth-temporary-credential request-url)
+;; Obtaining an Unauthorized Request Token (Section 6.1)
+;; Return procedure consumer-key -> consumer-secret -> (token secret-token additional-parameters)
+;;  The Request Token, The Token Secret and Additional parameters.
+;;  Additional parameters returns parsed as `cgi-parse-parameters'
+(define (oauth-temporary-credential request-url 
+                                    :key (class <oauth-cred>) (proc #f))
   (lambda (consumer-key consumer-secret)
     (let* ([r-response
             (oauth-request "GET" request-url
@@ -173,79 +179,100 @@
                              ("oauth_version" "1.0"))
                            consumer-secret)]
            [r-token  (cgi-get-parameter "oauth_token" r-response)]
-           [r-secret (cgi-get-parameter "oauth_token_secret" r-response)])
+           [r-secret (cgi-get-parameter "oauth_token_secret" r-response)]
+           [additionals (remove-params '("oauth_token" "oauth_token_secret")
+                                       r-response)])
       (unless (and r-token r-secret)
         (error "failed to obtain request token"))
-      (values r-token r-secret))))
+      (rlet1 cred (make class
+                    :consumer-key consumer-key
+                    :consumer-secret consumer-secret
+                    :access-token r-token
+                    :access-token-secret r-secret)
+        (when proc
+          (proc cred additionals))))))
 
 (define (oauth-authorize-constructor authorize-url)
-  (lambda (oauth-token :key (oauth-callback #f)
-                       :allow-other-keys params)
+  (lambda (temp-cred :key (oauth-callback #f)
+                     :allow-other-keys params)
     (when (odd? (length params))
       (error "Keywords are not even."))
-    (let1 query 
-        (compose-query 
-         `(
-           ("oauth_token" ,oauth-token)
-           ,@(if oauth-callback `(("oauth_callback" ,oauth-callback)) '())
-           ,@(let loop ((params params)
-                        (res '()))
-               (if (null? params)
-                 (reverse res)
-                 (let ((k (car params))
-                       (v (cadr params)))
-                   (loop (cddr params) 
-                         (cons 
-                          `(,(x->string k) ,(x->string v))
-                          res)))))))
-      #`",|authorize-url|?,|query|")))
+    (let1 params (let loop ((params params)
+                            (res '()))
+                   (if (null? params)
+                     (reverse res)
+                     (let ((k (car params))
+                           (v (cadr params)))
+                       (loop (cddr params) 
+                             (cons 
+                              `(,(x->string k) ,(x->string v))
+                              res)))))
+      (oauth-construct-authorize-url 
+       authorize-url
+       :oauth-token (~ temp-cred'access-token)
+       :oauth-callback oauth-callback
+       :params params))))
 
-(define (oauth-access-token authorize-url)
-  (lambda (c-key verifier r-token r-secret)
+;; Consumer Directs the User to the Service Provider (Section 6.2.1)
+(define (oauth-construct-authorize-url url
+                                       :key (oauth-token #f) (oauth-callback #f)
+                                       (params '()))
+  (let1 query 
+      (compose-query 
+       `(,@(if oauth-token `(("oauth_token" ,oauth-token)) '())
+         ,@(if oauth-callback `(("oauth_callback" ,oauth-callback)) '())
+         ,@params))
+    #`",|url|?,|query|"))
+
+;; Obtaining an Access Token (Section 6.3)
+;; Returns multiple values 
+;;  The Access Token, The Token Secret and Additional parameters.
+;;  Additional parameters returns parsed as `cgi-parse-parameters'
+(define (oauth-credential authorize-url :key (class <oauth-cred>) (proc #f))
+  (lambda (temp-cred verifier)
     (let* ([a-response
             (oauth-request "POST" authorize-url
-                           `(("oauth_consumer_key" ,c-key)
+                           `(("oauth_consumer_key" ,(~ temp-cred'consumer-key))
                              ("oauth_nonce" ,(oauth-nonce))
                              ("oauth_signature_method" "HMAC-SHA1")
                              ("oauth_timestamp" ,(timestamp))
-                             ("oauth_token" ,r-token)
+                             ("oauth_token" ,(~ temp-cred'access-token))
                              ("oauth_verifier" ,verifier)
                              ("oauth_version" "1.0"))
-                           r-secret)]
+                           (~ temp-cred'consumer-secret)
+                           (~ temp-cred'access-token-secret))]
            [a-token (cgi-get-parameter "oauth_token" a-response)]
-           [a-secret (cgi-get-parameter "oauth_token_secret" a-response)])
+           [a-secret (cgi-get-parameter "oauth_token_secret" a-response)]
+           [additionals (remove-params '("oauth_token" "oauth_token_secret")
+                                      a-response)])
       (unless (and a-token a-secret)
         (error "failed to obtain access token"))
-      (values a-token a-secret))))
+      (rlet1 cred (make class
+                    :consumer-key (~ temp-cred'consumer-key)
+                    :consumer-secret (~ temp-cred'consumer-secret)
+                    :access-token a-token
+                    :access-token-secret a-secret)
+        (when proc
+          (proc cred additionals))))))
 
 ;;
-;; Authenticate the client.
+;; Authenticate a client.
 ;;
 
 (define (oauth-client-authenticator request-sender authorizer)
-
   (lambda (consumer-key consumer-secret input-callback)
-    (receive (r-token r-secret)
-        (request-sender consumer-key consumer-secret)
-      (if-let1 oauth-verifier
-          (input-callback r-token)
-        (receive (a-token a-secret)
-            (authorizer 
-             consumer-key oauth-verifier
-             r-token r-secret)
-          (make <oauth-cred>
-            :consumer-key consumer-key
-            :consumer-secret consumer-secret
-            :access-token a-token
-            :access-token-secret a-secret))
-        #f))))
+    (and-let* ((temp (request-sender consumer-key consumer-secret))
+               (oauth-verifier (input-callback temp)))
+      (authorizer temp oauth-verifier))))
 
 ;;;
 ;;; Internal utilities
 ;;;
 
+;; Timestamp (Section 8)
 (define (timestamp) (number->string (sys-time)))
 
+;; Nonce (Section 8)
 (define oauth-nonce
   (let ([random-source (make <mersenne-twister>
                          :seed (* (sys-time) (sys-getpid)))]
@@ -271,4 +298,10 @@
 (define (compose-query params)
   (%-fix (http-compose-query #f params 'utf-8)))
 
+(define (remove-params names parameters)
+  (if (null? names)
+    parameters
+    (remove-params
+     (cdr names)
+     (remove (^x (string=? (car x) (car names))) parameters))))
 
