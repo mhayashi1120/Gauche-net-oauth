@@ -12,6 +12,7 @@
   (use srfi-13)
   (use www.cgi)
   (use math.mt-random)
+  (use gauche.parameter)
   (use gauche.uvector)
   (use gauche.version)
   (use gauche.experimental.ref)         ; for '~'.  remove after 0.9.1
@@ -19,7 +20,6 @@
   (export 
    <oauth-cred>
 
-   oauth-client-authenticator
    oauth-temporary-credential
    oauth-credential
    oauth-authorize-constructor
@@ -39,7 +39,11 @@
 ;; http://tools.ietf.org/html/rfc5849
 
 ;; OAuth related stuff.
-;; References to the section numbers refer to http://oauth.net/core/1.0/.
+;; References to the section numbers refer to http://oauth.net/core/1.0/
+
+;;TODO RSA-SHA1
+(define oauth-signature-method
+  (make-parameter 'hmac-sha1))
 
 ;; Signing Request (Section 9)
 ;; Returns query calculated "oauth_signature" parameter.
@@ -108,30 +112,32 @@
 ;;TODO 5.4.2 WWW-Authenticate
 
 ;; Reqest either request token or access token.
-(define (oauth-request method request-url oauth-params consumer-secret
-                       :optional (token-secret ""))
+(define (oauth-request method request-url oauth-params params consumer-secret
+                       :optional (token-secret "") (auth #f))
   (define (add-sign meth)
-    (let1 sign (oauth-signature meth request-url oauth-params '()
+    (let1 sign (oauth-signature meth request-url oauth-params params
                                 consumer-secret token-secret)
-      `(,@oauth-params ,sign)))
+      `(,@oauth-params ,@params ,sign)))
 
   (receive (scheme specific) (uri-scheme&specific request-url)
     ;; https is supported since 0.9.1
-    (define secure-opt
-      (cond [(equal? scheme "http") '()]
+    (define secure
+      (cond [(equal? scheme "http") #f]
             [(equal? scheme "https")
-             (if (version>? (gauche-version) "0.9") `(:secure #t) '())]
+             (if (version>? (gauche-version) "0.9") #t #f)]
             [else (error "oauth-request: unsupported scheme" scheme)]))
-    (receive (auth path query frag) (uri-decompose-hierarchical specific)
+    (receive (host path query frag) (uri-decompose-hierarchical specific)
       (receive (status header body)
           (cond [(equal? method "GET")
-                 (apply http-get auth
-                        #`",|path|?,(oauth-compose-query (add-sign \"GET\"))"
-                        secure-opt)]
+                 (http-get host
+                           #`",|path|?,(oauth-compose-query (add-sign \"GET\"))"
+                           :Authorization auth
+                           :secure secure)]
                 [(equal? method "POST")
-                 (apply http-post auth path
-                        (oauth-compose-query (add-sign "POST"))
-                        secure-opt)]
+                 (http-post host path
+                            (oauth-compose-query (add-sign "POST"))
+                            :Authorization auth
+                            :secure secure)]
                 [else (error "oauth-request: unsupported method" method)])
         (unless (equal? status "200")
           (errorf "oauth-request: service provider responded ~a: ~a"
@@ -149,7 +155,7 @@
   (let* ([o-params `(,@(if realm '(("realm" realm)) '())
                      ("oauth_consumer_key" ,(~ cred'consumer-key))
                      ("oauth_nonce" ,(oauth-nonce))
-                     ("oauth_signature_method" "HMAC-SHA1")
+                     ("oauth_signature_method" ,(signature-method-string))
                      ("oauth_timestamp" ,(timestamp))
                      ("oauth_token" ,(~ cred'access-token))
                      ("oauth_version" "1.0"))]
@@ -167,17 +173,19 @@
 ;; Return procedure consumer-key -> consumer-secret -> (token secret-token additional-parameters)
 ;;  The Request Token, The Token Secret and Additional parameters.
 ;;  Additional parameters returns parsed as `cgi-parse-parameters'
+;;  :class is extended class of <oauth-cred>
+;;  :proc is procedure that accept two args, <oauth-cred> and additional parameters
 (define (oauth-temporary-credential request-url 
                                     :key (class <oauth-cred>) (proc #f))
-  (lambda (consumer-key consumer-secret)
+  (lambda (consumer-key consumer-secret :optional (params '()))
     (let* ([r-response
             (oauth-request "GET" request-url
                            `(("oauth_consumer_key" ,consumer-key)
                              ("oauth_nonce" ,(oauth-nonce))
-                             ("oauth_signature_method" "HMAC-SHA1")
+                             ("oauth_signature_method" ,(signature-method-string))
                              ("oauth_timestamp" ,(timestamp))
                              ("oauth_version" "1.0"))
-                           consumer-secret)]
+                           params consumer-secret)]
            [r-token  (cgi-get-parameter "oauth_token" r-response)]
            [r-secret (cgi-get-parameter "oauth_token_secret" r-response)]
            [additionals (remove-params '("oauth_token" "oauth_token_secret")
@@ -228,23 +236,26 @@
 ;; Returns multiple values 
 ;;  The Access Token, The Token Secret and Additional parameters.
 ;;  Additional parameters returns parsed as `cgi-parse-parameters'
+;; keyword args are same as oauth-temporary-credential
 (define (oauth-credential authorize-url :key (class <oauth-cred>) (proc #f))
-  (lambda (temp-cred verifier)
-    (let* ([a-response
+  (lambda (temp-cred verifier :optional (params '()))
+    (let* ([auth (oauth-auth-header "POST" authorize-url params temp-cred)]
+           [a-response
             (oauth-request "POST" authorize-url
                            `(("oauth_consumer_key" ,(~ temp-cred'consumer-key))
                              ("oauth_nonce" ,(oauth-nonce))
-                             ("oauth_signature_method" "HMAC-SHA1")
+                             ("oauth_signature_method" ,(signature-method-string))
                              ("oauth_timestamp" ,(timestamp))
                              ("oauth_token" ,(~ temp-cred'access-token))
                              ("oauth_verifier" ,verifier)
                              ("oauth_version" "1.0"))
+                           params
                            (~ temp-cred'consumer-secret)
-                           (~ temp-cred'access-token-secret))]
+                           (~ temp-cred'access-token-secret) auth)]
            [a-token (cgi-get-parameter "oauth_token" a-response)]
            [a-secret (cgi-get-parameter "oauth_token_secret" a-response)]
            [additionals (remove-params '("oauth_token" "oauth_token_secret")
-                                      a-response)])
+                                       a-response)])
       (unless (and a-token a-secret)
         (error "failed to obtain access token"))
       (rlet1 cred (make class
@@ -254,16 +265,6 @@
                     :access-token-secret a-secret)
         (when proc
           (proc cred additionals))))))
-
-;;
-;; Authenticate a client.
-;;
-
-(define (oauth-client-authenticator request-sender authorizer)
-  (lambda (consumer-key consumer-secret input-callback)
-    (and-let* ((temp (request-sender consumer-key consumer-secret))
-               (oauth-verifier (input-callback temp)))
-      (authorizer temp oauth-verifier))))
 
 ;;;
 ;;; Internal utilities
@@ -304,4 +305,11 @@
     (remove-params
      (cdr names)
      (remove (^x (string=? (car x) (car names))) parameters))))
+
+(define (signature-method-string)
+  (case (oauth-signature-method)
+    ((hmac-sha1) "HMAC-SHA1")
+    ((rsa-sha1) "RSA-SHA1")
+    (else
+     (error "Unsupported method" (oauth-signature-method)))))
 
