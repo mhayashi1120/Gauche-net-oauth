@@ -3,6 +3,7 @@
 ;;;
 
 (define-module net.oauth
+  (use util.list)
   (use rfc.http)
   (use rfc.sha)
   (use rfc.hmac)
@@ -34,7 +35,8 @@
   ((consumer-key :init-keyword :consumer-key)
    (consumer-secret :init-keyword :consumer-secret)
    (access-token :init-keyword :access-token)
-   (access-token-secret :init-keyword :access-token-secret)))
+   (access-token-secret :init-keyword :access-token-secret)
+   (additional-parameters :init-keyword :additional-parameters)))
 
 ;; http://tools.ietf.org/html/rfc5849
 
@@ -170,13 +172,14 @@
     (format "OAuth ~a" (string-join auth ", "))))
 
 ;; Obtaining an Unauthorized Request Token (Section 6.1)
-;; Return procedure consumer-key -> consumer-secret -> (token secret-token additional-parameters)
-;;  The Request Token, The Token Secret and Additional parameters.
+;; Return procedure's signature is
+;;
+;;     consumer-key -> consumer-secret -> <oauth-cred>
+;;
 ;;  Additional parameters returns parsed as `cgi-parse-parameters'
 ;;  :class is extended class of <oauth-cred>
-;;  :proc is procedure that accept two args, <oauth-cred> and additional parameters
 (define (oauth-temporary-credential request-url 
-                                    :key (class <oauth-cred>) (proc #f))
+                                    :key (class <oauth-cred>))
   (lambda (consumer-key consumer-secret :optional (params '()))
     (let* ([r-response
             (oauth-request "GET" request-url
@@ -192,13 +195,12 @@
                                        r-response)])
       (unless (and r-token r-secret)
         (error "failed to obtain request token"))
-      (rlet1 cred (make class
-                    :consumer-key consumer-key
-                    :consumer-secret consumer-secret
-                    :access-token r-token
-                    :access-token-secret r-secret)
-        (when proc
-          (proc cred additionals))))))
+      (make class
+        :consumer-key consumer-key
+        :consumer-secret consumer-secret
+        :access-token r-token
+        :access-token-secret r-secret
+        :additional-parameters additionals))))
 
 (define (oauth-authorize-constructor authorize-url)
   (lambda (temp-cred :key (oauth-callback #f)
@@ -226,9 +228,10 @@
                                        :key (oauth-token #f) (oauth-callback #f)
                                        (params '()))
   (let1 query 
-      (compose-query 
-       `(,@(if oauth-token `(("oauth_token" ,oauth-token)) '())
-         ,@(if oauth-callback `(("oauth_callback" ,oauth-callback)) '())
+      (compose-query
+       `(,@(cond-list
+            [oauth-token `("oauth_token" ,oauth-token)]
+            [oauth-callback `("oauth_callback" ,oauth-callback)])
          ,@params))
     #`",|url|?,|query|"))
 
@@ -237,7 +240,7 @@
 ;;  The Access Token, The Token Secret and Additional parameters.
 ;;  Additional parameters returns parsed as `cgi-parse-parameters'
 ;; keyword args are same as oauth-temporary-credential
-(define (oauth-credential authorize-url :key (class <oauth-cred>) (proc #f))
+(define (oauth-credential authorize-url :key (class <oauth-cred>))
   (lambda (temp-cred verifier :optional (params '()))
     (let* ([auth (oauth-auth-header "POST" authorize-url params temp-cred)]
            [a-response
@@ -258,13 +261,12 @@
                                        a-response)])
       (unless (and a-token a-secret)
         (error "failed to obtain access token"))
-      (rlet1 cred (make class
-                    :consumer-key (~ temp-cred'consumer-key)
-                    :consumer-secret (~ temp-cred'consumer-secret)
-                    :access-token a-token
-                    :access-token-secret a-secret)
-        (when proc
-          (proc cred additionals))))))
+      (make class
+        :consumer-key (~ temp-cred'consumer-key)
+        :consumer-secret (~ temp-cred'consumer-secret)
+        :access-token a-token
+        :access-token-secret a-secret
+        :additional-parameters additionals))))
 
 ;;;
 ;;; Internal utilities
@@ -309,7 +311,6 @@
 (define (signature-method-string)
   (case (oauth-signature-method)
     ((hmac-sha1) "HMAC-SHA1")
-    ((rsa-sha1) "RSA-SHA1")
     (else
      (error "Unsupported method" (oauth-signature-method)))))
 
