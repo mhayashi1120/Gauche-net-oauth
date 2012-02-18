@@ -1,12 +1,6 @@
 This module provides an interface OAuth authentication.
 
-Step by step:
-
-1. Install the package.
-
-   From tarball:
-
-     $ gauche-package install [-S root] Gauche-net-oauth-0.5.tgz
+Install:
 
    From source:
 
@@ -21,10 +15,14 @@ Step by step:
    ('-S root' option or 'sudo' may be required if you want to install
    the package system-wide.)
 
-[Module] net.oauth
+Commentary:
 
-See the https://github.com/mhayashi1120/Gauche-net-twitter repository
+Please see the https://github.com/mhayashi1120/Gauche-net-twitter repository
 sample of using.
+
+OR
+
+See the "samples" directory contains code that can be grant from google.
 
 
 Credits:
