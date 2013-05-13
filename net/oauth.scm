@@ -176,7 +176,7 @@
 ;;
 ;;     consumer-key -> consumer-secret -> <oauth-cred>
 ;;
-;;  Additional parameters returns parsed as `cgi-parse-parameters'
+;;  Additional parameters are parsed as `cgi-parse-parameters'
 ;;  :class is extended class of <oauth-cred>
 (define (oauth-temporary-credential request-url 
                                     :key (class <oauth-cred>))
