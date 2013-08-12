@@ -18,7 +18,7 @@
   (use gauche.version)
   (use gauche.experimental.ref)         ; for '~'.  remove after 0.9.1
   (use text.tree)
-  (export
+  (export 
    <oauth-cred>
 
    oauth-temporary-credential
@@ -52,7 +52,7 @@
 (define (oauth-signature method request-url oauth params consumer-secret token-secret)
   ;; Calculate signature.
   (define (signature)
-    (let1 normalized `(,@(oauth-params)
+    (let1 normalized `(,@(oauth-params) 
                        ,@(url-encoded-params))
       (base64-encode-string
        (hmac-digest-string (signature-base-string method request-url normalized)
@@ -163,8 +163,8 @@
                      ("oauth_version" "1.0"))]
          [sign (oauth-signature method request-url o-params params
                                 (~ cred'consumer-secret) (~ cred'access-token-secret))]
-         [auth (map
-                (^p
+         [auth (map 
+                (^p 
                  (let ((k (car p))
                        (v (cadr p)))
                    #`",(oauth-uri-encode k)=\",(oauth-uri-encode v)\""))
@@ -178,7 +178,7 @@
 ;;
 ;;  Additional parameters are parsed as `cgi-parse-parameters'
 ;;  :class is extended class of <oauth-cred>
-(define (oauth-temporary-credential request-url
+(define (oauth-temporary-credential request-url 
                                     :key (class <oauth-cred>))
   (lambda (consumer-key consumer-secret :optional (params '()))
     (let* ([r-response
@@ -213,11 +213,11 @@
                      (reverse res)
                      (let ((k (car params))
                            (v (cadr params)))
-                       (loop (cddr params)
-                             (cons
+                       (loop (cddr params) 
+                             (cons 
                               `(,(x->string k) ,(x->string v))
                               res)))))
-      (oauth-construct-authorize-url
+      (oauth-construct-authorize-url 
        authorize-url
        :oauth-token (~ temp-cred'access-token)
        :oauth-callback oauth-callback
@@ -227,7 +227,7 @@
 (define (oauth-construct-authorize-url url
                                        :key (oauth-token #f) (oauth-callback #f)
                                        (params '()))
-  (let1 query
+  (let1 query 
       (compose-query
        `(,@(cond-list
             [oauth-token `("oauth_token" ,oauth-token)]
@@ -236,7 +236,7 @@
     #`",|url|?,|query|"))
 
 ;; Obtaining an Access Token (Section 6.3)
-;; Returns multiple values
+;; Returns multiple values 
 ;;  The Access Token, The Token Secret and Additional parameters.
 ;;  Additional parameters returns parsed as `cgi-parse-parameters'
 ;; keyword args are same as oauth-temporary-credential
