@@ -1,0 +1,31 @@
+(use net.google.oauth)
+(use srfi-13)
+
+(debug-print-width #f)
+
+;; Register your domain at following site.
+;; Google: https://accounts.google.com/ManageDomains
+
+(add-load-path ".")
+
+(define (default-authenticate-callback temp-cred)
+  (let1 url (google-oauth-authorize-url temp-cred)
+    (print "Open the following url by your browser and accept the authentication.")
+    (print url)
+    (let loop ()
+      (display "You have accepted? [Y/n] ") (flush)
+      (let1 l (read-line)
+        (cond [(eof-object? l) #f]
+              [(or (string=? (string-upcase l) "Y")
+                   (string-null? l)) #t]
+              [else #f])))))
+
+(define (main args)
+  (or (and-let* ((scope '("http://www.google.com/calendar/feeds"))
+                 (temp (google-oauth-request-token
+                        "***** YOUR CONSUMER KEY *****" "****** YOUR SECRET KEY *****" 
+                        scope))
+                 (v (default-authenticate-callback temp))
+                 (cred (google-oauth-access-token temp v)))
+        0)
+      1))
