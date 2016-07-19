@@ -139,7 +139,8 @@
                  (http-post host path
                             (oauth-compose-query (add-sign "POST"))
                             :Authorization auth
-                            :secure secure)]
+                            :secure secure
+                            :content-type "application/x-www-form-urlencoded")]
                 [else (error "oauth-request: unsupported method" method)])
         (unless (equal? status "200")
           (errorf "oauth-request: service provider responded ~a: ~a"
