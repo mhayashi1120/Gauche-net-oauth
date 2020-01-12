@@ -1,2 +1,5 @@
 configure
 VERSION
+*.gpd
+Makefile
+
