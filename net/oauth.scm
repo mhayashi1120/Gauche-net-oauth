@@ -38,12 +38,20 @@
    (access-token-secret :init-keyword :access-token-secret)
    (additional-parameters :init-keyword :additional-parameters)))
 
+;; Since gauche 0.9.8 keyword handling.
+(define (->string x)
+  (cond
+   [(keyword? x)
+    (keyword->string x)]
+   [else
+    (x->string x)]))
+
 ;; http://tools.ietf.org/html/rfc5849
 
 ;; OAuth related stuff.
 ;; References to the section numbers refer to http://oauth.net/core/1.0/
 
-;;TODO RSA-SHA1
+;;TODO support RSA-SHA1
 (define oauth-signature-method
   (make-parameter 'hmac-sha1))
 
@@ -216,7 +224,7 @@
                            (v (cadr params)))
                        (loop (cddr params) 
                              (cons 
-                              `(,(x->string k) ,(x->string v))
+                              `(,(->string k) ,(x->string v))
                               res)))))
       (oauth-construct-authorize-url 
        authorize-url
