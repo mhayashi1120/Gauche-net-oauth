@@ -16,6 +16,11 @@ GAUCHE_CONFIG  = "@GAUCHE_CONFIG@"
 GAUCHE_PACKAGE = "@GAUCHE_PACKAGE@"
 INSTALL        = "@GAUCHE_INSTALL@" -C
 
+CFLAGS     = @CFLAGS@
+CPPFLAGS   = @CPPFLAGS@ @WINDOWS_UNICODE_FLAG@
+LDFLAGS    = @LDFLAGS@
+LIBS       = @LIBS@
+
 # Other parameters
 SOEXT  = @SOEXT@
 OBJEXT = @OBJEXT@
@@ -25,20 +30,18 @@ LOCAL_PATHS = "@LOCAL_PATHS@"
 # Module-specific stuff
 PACKAGE   = Gauche-net-oauth
 
-ARCHFILES = 
+ARCHFILES =
 SCMFILES  = $(srcdir)/net/oauth.scm
 HEADERS   =
 
 TARGET    = $(ARCHFILES)
-GENERATED =
+CLEANFILES =
 CONFIG_GENERATED = Makefile config.cache config.log config.status \
 		   configure.lineno autom4te*.cache $(PACKAGE).gpd
 
 GAUCHE_PKGINCDIR  = "$(DESTDIR)@GAUCHE_PKGINCDIR@"
 GAUCHE_PKGLIBDIR  = "$(DESTDIR)@GAUCHE_PKGLIBDIR@"
 GAUCHE_PKGARCHDIR = "$(DESTDIR)@GAUCHE_PKGARCHDIR@"
-
-net_oauth_SRCS =
 
 all : $(TARGET)
 
@@ -59,12 +62,11 @@ uninstall :
 	$(INSTALL) -U $(GAUCHE_PKGLIBDIR)/.packages $(PACKAGE).gpd
 
 clean :
-	$(GAUCHE_PACKAGE) compile --clean net_oauth $(net_oauth_SRCS)
-	rm -rf core $(TARGET) $(GENERATED) *~ test.log so_locations
+	$(GAUCHE_PACKAGE) compile --clean gauche_net_oauth
+	rm -rf core $(TARGET) $(CLEANFILES) *~ test.log so_locations
 
 distclean : clean
 	rm -rf $(CONFIG_GENERATED)
 
 maintainer-clean : clean
 	rm -rf $(CONFIG_GENERATED)  VERSION
-
