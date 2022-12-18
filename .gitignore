@@ -1,4 +1,3 @@
-configure
 VERSION
 *.gpd
 Makefile
