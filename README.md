@@ -1,12 +1,13 @@
+# Gauche-net-oauth
+
 This module provides an interface OAuth authentication.
 
-Install:
+## Install:
 
    From source:
 
-     $ git clone git://github.com/mhayashi1120/Gauche-net-oauth.git
+     $ git clone git@github.com:mhayashi1120/Gauche-net-oauth.git
      $ cd Gauche-net-oauth
-     $ ./DIST gen
      $ ./configure
      $ make
      $ make -s check
@@ -15,7 +16,7 @@ Install:
    ('-S root' option or 'sudo' may be required if you want to install
    the package system-wide.)
 
-Commentary:
+## Commentary:
 
 Please see the https://github.com/mhayashi1120/Gauche-net-twitter repository
 sample of using.

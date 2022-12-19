@@ -43,5 +43,5 @@
   :homepage "http://github.com/mhayashi1120/Gauche-net-oauth/"
 
   ;; Repository URL, e.g. github
-  ; :repository "http://example.com/Gauche-net-oauth.git"
+  :repository "git@github.com:mhayashi1120/Gauche-net-oauth.git"
   )
