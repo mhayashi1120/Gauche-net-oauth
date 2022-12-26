@@ -64,7 +64,7 @@
                        ,@(url-encoded-params))
       (base64-encode-string
        (hmac-digest-string (signature-base-string method request-url normalized)
-                           :key #`",|consumer-secret|&,|token-secret|"
+                           :key #"~|consumer-secret|&~|token-secret|"
                            :hasher <sha1>))))
 
   (define (oauth-params)
@@ -140,7 +140,7 @@
       (receive (status header body)
           (cond [(equal? method "GET")
                  (http-get host
-                           #`",|path|?,(oauth-compose-query (add-sign \"GET\"))"
+                           #"~|path|?~(oauth-compose-query (add-sign \"GET\"))"
                            :Authorization auth
                            :secure secure)]
                 [(equal? method "POST")
@@ -176,7 +176,7 @@
                 (^p 
                  (let ((k (car p))
                        (v (cadr p)))
-                   #`",(oauth-uri-encode k)=\",(oauth-uri-encode v)\""))
+                   #"~(oauth-uri-encode k)=\"~(oauth-uri-encode v)\""))
                 `(,@o-params ,sign))])
     (format "OAuth ~a" (string-join auth ", "))))
 
@@ -242,7 +242,7 @@
             [oauth-token `("oauth_token" ,oauth-token)]
             [oauth-callback `("oauth_callback" ,oauth-callback)])
          ,@params))
-    #`",|url|?,|query|"))
+    #"~|url|?~|query|"))
 
 ;; Obtaining an Access Token (Section 6.3)
 ;; Returns multiple values 
