@@ -1,5 +1,7 @@
 # Gauche-net-oauth
 
+[![CI](https://github.com/mhayashi1120/Gauche-net-oauth/actions/workflows/build.yml/badge.svg)](https://github.com/mhayashi1120/Gauche-net-oauth/actions/workflows/build.yml)
+
 This module provides an interface OAuth authentication.
 
 ## Install:
