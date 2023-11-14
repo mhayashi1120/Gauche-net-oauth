@@ -3,4 +3,4 @@
 set -eu
 
 ./configure
-make check
+make check install validate
